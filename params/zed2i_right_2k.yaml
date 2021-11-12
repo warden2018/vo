@@ -1,0 +1,23 @@
+#RIGHT_CAM_2K
+Camera.fx: 1061.79
+Camera.fy: 1061.34
+Camera.cx: 1126.71
+Camera.cy: 631.061
+
+Camera.k1: -0.0430613
+Camera.k2: 0.0115478
+Camera.k3: -0.00536685
+Camera.p1: -0.000155328
+Camera.p2: -0.000405637
+
+frame_id: base_link
+child_frame_id: zed2i_right_camera_frame
+
+rotation.x: 0.0
+rotation.y: 0.0
+rotation.z: 0.0
+rotation.w: 1.0
+
+translation.x: 0.0
+translation.y: -0.06
+translation.z: 0.0 

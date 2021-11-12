@@ -1,0 +1,12 @@
+frame_id: zed2i_left_camera_frame
+child_frame_id: zed2i_imu_link
+transform:
+    rotation:
+        x: 0.00149006
+        y: -0.00115806
+        z: -0.00195313
+        w: 0.999996
+    translation:
+        x: -0.002
+        y: -0.023
+        z: -0.002

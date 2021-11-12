@@ -1,0 +1,110 @@
+@startuml
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+skinparam sequenceParticipant underline
+
+actor User
+participant "VisualOdometry" as A
+participant "Frame" as B
+participant "Tracking" as C
+participant "Backend" as D
+participant "Map" as G
+participant "Camera" as E
+participant "Feature" as F
+
+
+User -> A: Launch VisualOdometry
+activate A
+
+
+#TODO(Yang LI) Nedd to adapt to my_slam below
+A -> A: onInitialize:utils::loadJson(targets.json)
+A -> E: parseDir
+activate E
+E -> E: loadSpecialTargets()
+E -> E: loadCameraNames()
+E -> E: addIntrinsicsData(useExternalCamera)
+E -> E: addExtrinsicsData(useExternalCamera)
+
+E -> A: m_dataDir
+
+A -> B: Create 
+activate B
+activate F
+
+A -> B: setTargetDatabase
+A -> B: parseConfig
+
+
+B -> D: createCalibrationGraph
+activate D
+loop iterate all on vehicle cameras   
+    D -> B: IntrinsicsData& camera = graph.getIntrinsicsData()
+    B -> B: Add camera.type
+    B -> B: Add camera.constraints
+end
+loop iterate all images on extrinsics and external folder
+    B -> D: addVertex of cameraObject
+    B -> B: addCameraImage
+    B -> B: detectTargets
+    B -> F: detectCoarse
+    F -> F: detectTags
+    F -> F: processDetectedTags 
+    F -> B: return DetectionResult
+    B -> D: addVertex of targetObject
+    B -> D: addEdge between camera to target
+end
+
+B -> D: addVertex of CarWithTargetsCalibrationObject
+
+loop iterate all detected wheel targets
+    B -> D: addEdge between car to wheel target
+end
+
+
+
+
+B -> C: Create CalibrationEngine
+activate C
+C -> C: calibrateIntrinsics
+activate C
+C -> C: initializeAllIntrinsics
+activate C
+loop iterate all the vehicle cameras 
+    C -> C: initializeIntrinsics
+    C -> C: initializeIntrinsicConstraintPoses
+end
+
+C -> C: refineAllIntrinsics
+activate C
+loop iterate all the vehicle cameras
+    C -> C: refineIntrinsics
+    C -> C: refineIntrinsicsFtheta
+deactivate C
+
+
+C -> C: calibrateExtrinsics
+activate C
+C -> D: setVertexCameraModelsFromIntrinsics
+
+C -> C: initializeCalibration
+loop iterate all the 
+C -> C: optimizeCalibration
+
+
+
+B -> H: Create ValidationEngine
+activate H
+
+
+
+
+
+B --> A: Request Created
+deactivate B
+
+A --> User: Done
+deactivate A
+
+@enduml

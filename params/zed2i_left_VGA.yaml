@@ -1,0 +1,24 @@
+#LEFT_CAM_VGA
+Camera.fx: 263.83
+Camera.fy: 263.715
+Camera.cx: 340.8275
+Camera.cy: 187.37575
+
+Camera.k1: -0.0439908
+Camera.k2: 0.0135859
+Camera.k3: -0.00606365
+Camera.p1: 0.000235197
+Camera.p2: -0.000456153
+
+
+frame_id: base_link
+child_frame_id: zed2i_left_camera_frame
+
+rotation.x: 0.0
+rotation.y: 0.0
+rotation.z: 0.0
+rotation.w: 1.0
+
+translation.x: 0.0
+translation.y: 0.06
+translation.z: 0.0   

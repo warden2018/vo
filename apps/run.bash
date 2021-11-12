@@ -1,0 +1,1 @@
+/home/minerva/minerva/Dai_Yang/catkin_ws/devel/lib/my_slam/my_slam -flagfile=/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/conf/myslam.conf
