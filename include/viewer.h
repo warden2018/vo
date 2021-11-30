@@ -27,6 +27,9 @@ class Viewer {
     // 更新地图
     void UpdateMap();
 
+    //验证三角化效果
+    void ValidateTriangulation();
+
    private:
     void ThreadLoop();
 
@@ -36,8 +39,16 @@ class Viewer {
 
     void FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera);
 
-    /// plot the features in current frame into an image
-    cv::Mat PlotFrameImage();
+    void Put3DInfo2Img(const Vec3& pos, const cv::Point2f& location, const int& id, const cv::Mat& img);
+    
+    
+    cv::Mat PlotFrameLeftImage();
+
+    cv::Mat PlotFrameRightImage();
+
+    cv::Mat PlotFrameLeftReproj();
+
+    cv::Mat PlotFrameRightReproj();
 
     std::shared_ptr<Frame> current_frame_ = nullptr;
     Map::Ptr map_ = nullptr;

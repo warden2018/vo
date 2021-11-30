@@ -15,9 +15,12 @@
 namespace my_slam{
 
 Tracking::Tracking() {
-    gftt_detector_ = cv::GFTTDetector::create(FLAGS_nFeatures,FLAGS_gftt_qualityLevel,FLAGS_gftt_minDistance);
-    LOG(INFO) << "Tracking created opencv GFTTDetector with params: (" << FLAGS_nFeatures << 
-                ", " << FLAGS_gftt_qualityLevel << ", "  << FLAGS_gftt_minDistance;
+    //ORB Extractor
+    ORBextractor_left_ = ORBextractor::CreateNewORBExtractor(FLAGS_LeftORBParamsFile);
+    ORBextractor_right_ = ORBextractor::CreateNewORBExtractor(FLAGS_RightORBParamsFile);
+    //gftt_detector_ = cv::GFTTDetector::create(FLAGS_nFeatures,FLAGS_gftt_qualityLevel,FLAGS_gftt_minDistance);
+    // LOG(INFO) << "Tracking created opencv GFTTDetector with params: (" << FLAGS_nFeatures << 
+    //             ", " << FLAGS_gftt_qualityLevel << ", "  << FLAGS_gftt_minDistance;
 
     status_ = TrackingStatus::INITIALIZING;
 
@@ -25,6 +28,45 @@ Tracking::Tracking() {
 
 }
 
+bool Tracking::AddImage(const double& timeStamp, const cv::Mat& leftImg, const cv::Mat& rightImg) {
+    cv::Mat left_gray,right_gray;
+    cvtColor(leftImg, left_gray, cv::COLOR_RGB2GRAY);
+    cvtColor(rightImg, right_gray, cv::COLOR_RGB2GRAY);
+
+    std::unique_ptr<Frame> new_frame = nullptr;
+    if(last_frame_) {
+        new_frame = Frame::CreateFrame(timeStamp,left_camera_,right_camera_,ORBextractor_left_,ORBextractor_right_,last_frame_->Pose(),left_gray,right_gray);
+    } else {
+        new_frame = Frame::CreateFrame(timeStamp,left_camera_,right_camera_,ORBextractor_left_,ORBextractor_right_,Eigen::Isometry3d::Identity(),left_gray,right_gray);
+    }
+
+    current_frame_ = std::move(new_frame);
+
+    switch (status_) {
+        case TrackingStatus::INITIALIZING: //准备初始化
+             stereoInit();
+            break;
+        case TrackingStatus::TRACKING_GOOD: //不做事情，因为新的frame和上一帧frame相似，足够多的特征点，新相机的位姿也估计得很好
+                                            //所以在这种状态下，地图点是不添加的
+            break;
+        case TrackingStatus::TRACKING_BAD:
+            Track();
+            break;
+        
+        case TrackingStatus::TRACKING_LOST:
+            Reset();
+            break;
+
+        default:
+            break;
+    }
+
+    last_frame_ = current_frame_;
+    LogTrackingStatus();
+
+}
+
+//弃用这个函数，Frame需要在Tracking里面组装，之前是在VO里面组装。
 void Tracking::AddFrame(std::shared_ptr<Frame> frame) {
     LOG(INFO) << "Step into AddFrame.";
     LogTrackingStatus();
@@ -59,7 +101,7 @@ bool Tracking::Track() {
     }
     
     TrackCurrentFrame(); //返回光流匹配到的特征点数量
-    tracking_inliers_ = EstimateCurrentPose_g2o(); //估计出当前帧的位姿
+    tracking_inliers_ = EstimateCurrentPose_g2o_14(); //估计出当前帧的位姿
 
     //根据测量值也就是前后帧图像的匹配情况，利用ceres框架得到内点的数量做比较
      if(tracking_inliers_ > FLAGS_nFeaturesTracking) {
@@ -179,12 +221,14 @@ int Tracking::DetectFeaturesOfRight() {
 void Tracking::TriagulateNewPoints() {
     //过滤current_frame_当中左目相机特征点，找到那些没有3D地图点的特征点
     std::vector<bool> unT; //存储feature是否被三角化
-    std::vector<cv::KeyPoint> UKs_left,UKs_right; // UK意思是Untriagulated KeyPoint
+    std::vector<cv::Point2f> UKs_left,UKs_right; // UK意思是Untriagulated KeyPoint
     for(int i=0; i < current_frame_->GetLeftFeatureNum();i++) {
         if(current_frame_->GetLeftFeatureByindex(i)->GetMapPoint() == nullptr && 
             current_frame_->GetRightFeatureByindex(i)!=nullptr) {
-                UKs_left.push_back(current_frame_->GetLeftFeatureByindex(i)->GetKeyPoint());
-                UKs_right.push_back(current_frame_->GetRightFeatureByindex(i)->GetKeyPoint());
+                auto left_feature = current_frame_->GetLeftFeatureByindex(i)->GetKeyPoint();
+                auto right_feature = current_frame_->GetRightFeatureByindex(i)->GetKeyPoint();
+                UKs_left.push_back(current_frame_->GetLeftCamera()->Pixel2camera(left_feature));
+                UKs_right.push_back(current_frame_->GetRightCamera()->Pixel2camera(right_feature));
             }
     }
 
@@ -226,7 +270,8 @@ void Tracking::TriagulateNewPoints() {
  * 变为last_frame_, 里面已经包含了这部分的特征点。
  */
 int Tracking::DetectNewLeftFeatures() {
-    cv::Mat maskedImg(current_frame_->GetUndistortLeftImg().size(),CV_8UC1,255); //这是一张纯黑色的图像
+    cv::Mat maskedImg = current_frame_->GetUndistortLeftImg().clone();
+    //cv::Mat maskedImg(current_frame_->GetUndistortLeftImg().size(),CV_8UC1,255); //这是一张纯黑色的图像
     for(auto& feature : current_frame_->GetLeftFeatures()) {
         double half_rect = FLAGS_maskNeigbourPixels;
         cv::rectangle(maskedImg,
@@ -237,8 +282,13 @@ int Tracking::DetectNewLeftFeatures() {
     }
 
     std::vector<cv::KeyPoint> newDetected;
-    gftt_detector_->detect(current_frame_->GetUndistortLeftImg(),newDetected,maskedImg);
-
+    cv::Mat mDescriptors;
+    std::vector<int> lappingArea;
+    lappingArea.push_back(current_frame_->GetUndistortLeftImg().size().width);
+    lappingArea.push_back(current_frame_->GetUndistortLeftImg().size().height);
+    //gftt_detector_->detect(current_frame_->GetUndistortLeftImg(),newDetected,maskedImg);
+    ORBextractor_left_->Extract(current_frame_->GetUndistortLeftImg(),cv::Mat(),
+                                newDetected,mDescriptors,lappingArea);
 
     for(size_t i = 0; i < newDetected.size(); i++) {
         auto feature = Feature::CreateNewFeature(current_frame_,newDetected[i]);
@@ -292,26 +342,36 @@ TrackingStatus Tracking::GetStatus() {
 }
 
 bool Tracking::stereoInit() {
-    //先检测出左图特征点
-    int numLeft = DetectNewLeftFeatures();
-    //再从右图检测出和左图对应的特征点
-    int numRight = DetectFeaturesOfRight();
-    if(numRight > numLeft) {
-        LOG(ERROR) << "In stereo init, right features should not be larger than left." 
-                    << "Left: " << numLeft << " right: " << numRight;
+    if(current_frame_->N>500) {//z找到了大于500个ORB点
+        //起始坐标，单位阵
+        current_frame_->SetPose(Eigen::Isometry3d::Identity());
+        // Create KeyFrame
+        //KeyFrame* pKFini = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
+
+        // Insert KeyFrame in the map
+        map_->InsertKeyFrame(current_frame_); //ORB里面是通过这个Frame构建了一KeyFrame
+
+        // Create MapPoints and asscoiate to KeyFrame
+        for(int i=0; i<current_frame_->N;i++)
+        {
+            float z = current_frame_->vDepth_[i];
+            if(z>0)
+            {
+                Vec3f x3D = current_frame_->UnprojectStereo(i);
+                auto newMapPoint = MapPoint::CreateNewMapPoint(Converter::toVec3(x3D));
+                std::shared_ptr<MapPoint> sMp = std::move(newMapPoint);
+                //newMapPoint->AddObservation();
+                map_->InsertMapPoint(sMp);
+
+                current_frame_->vpMapPoints_[i] = sMp;
+            }
+        }
+
+        LOG(INFO) << "New map created with " << map_->GetAllMapPoints().size() << " points";
+        return true;
+    } else {
         return false;
     }
-    
-     bool success = BuildInitMap();
-    if(success) {
-        status_ = TrackingStatus::TRACKING_BAD;
-        // if(viewer_) {
-        //     viewer_->AddCurrentFrame(current_frame_);
-        //     viewer_->UpdateMap();
-        // }
-    }
-
-    return true;
 }
 
 bool Tracking::SetMap(std::shared_ptr<Map> map) {
@@ -422,69 +482,64 @@ int Tracking::TrackCurrentFrame() {
     // return 1;
 }
 
-
-int Tracking::EstimateCurrentPose_g2o() {
-    // setup g2o
-    typedef g2o::BlockSolver_6_3 BlockSolverType;
-    typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType>
-        LinearSolverType;
+int Tracking::EstimateCurrentPose_g2o_orbslam2() {
+    typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> BlockSolverType;  // pose is 6, landmark is 3
+    typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType; // 线性求解器类型
+    // 梯度下降方法，可以从GN, LM, DogLeg 中选
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
-        g2o::make_unique<BlockSolverType>(
-            g2o::make_unique<LinearSolverType>()));
-    g2o::SparseOptimizer optimizer;
-    optimizer.setAlgorithm(solver);
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+    g2o::SparseOptimizer optimizer;     // 图模型
+    optimizer.setAlgorithm(solver);   // 设置求解器
+    optimizer.setVerbose(true);       // 打开调试输出
 
-    // 相机参数顶点
-    std::shared_ptr<g2o::CameraParameters> cam_params_left
-        = std::make_shared<g2o::CameraParameters>(current_frame_->GetLeftCamera()->K_eigen()(0,0), principal_point, 0.);
+    int nInitialCorrespondences=0;
 
-    cam_params->setId(0);
+    // Set Frame vertex
+    g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
+    vSE3->setEstimate(Converter::toSE3Quat(current_frame_->Pose())); //相机的世界坐标系齐次矩阵
+    vSE3->setId(0);
+    vSE3->setFixed(false);
+    optimizer.addVertex(vSE3);
+    const float delta2d = sqrt(5.991);
 
-
-    std::shared_ptr<g2o::VertexSE3Expmap> vertex_pose 
-                                    = std::make_shared<g2o::VertexSE3Expmap>();
-
-    vertex_pose->setId(0);
-    vertex_pose->setEstimate(Converter::toSE3Quat(current_frame_->Pose()));
-    optimizer.addVertex(vertex_pose.get());
-
-    // edges
-    int index = 1;
-    std::vector<std::shared_ptr<g2o::EdgeProjectXYZ2UV>> edges;
+    //
     std::vector<std::shared_ptr<Feature>> features;
+    std::vector<std::shared_ptr<EdgeSE3ProjectXYZOnlyPoseOneinStereo>> edges;
     for (size_t i = 0; i < current_frame_->GetLeftFeatureNum(); ++i) {
         auto mp = current_frame_->GetLeftFeatureByindex(i)->GetMapPoint();
-        if (mp) {
+        if(mp) {
             features.push_back(current_frame_->GetLeftFeatureByindex(i));
-            std::shared_ptr<g2o::EdgeProjectXYZ2UV> edge = std::make_shared<g2o::EdgeProjectXYZ2UV>();
+            std::shared_ptr<EdgeSE3ProjectXYZOnlyPoseOneinStereo> edge = 
+                        std::make_shared<EdgeSE3ProjectXYZOnlyPoseOneinStereo>();
+            edge->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));//设置顶点
+            edge->setMeasurement(Converter::toVector2d(current_frame_->GetLeftFeatureByindex(i)->GetKeyPoint().pt));
+            edge->setInformation(Eigen::Matrix2d::Identity());
+            g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber; //鲁棒核函数
+            edge->setRobustKernel(rk);
+            rk->setDelta(delta2d);
+
             edge->fx = current_frame_->GetLeftCamera()->K_eigen()(0,0);
             edge->fy = current_frame_->GetLeftCamera()->K_eigen()(1,1);
             edge->cx = current_frame_->GetLeftCamera()->K_eigen()(0,2);
             edge->cy = current_frame_->GetLeftCamera()->K_eigen()(1,2);
-            edge->setId(index);
-            //添加相机顶点
-            edge->setVertex(1, vertex_pose.get());
-            //添加地图顶点
-            std::shared_ptr<g2o::VertexSBAPointXYZ> vMapPoint = std::make_shared<g2o::VertexSBAPointXYZ>();
-            vMapPoint->setId(mp->GetId());
-            vMapPoint->setEstimate(mp->Pos());
-            edge->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(vMapPoint.get()));
-            edge->setMeasurement(
-                Converter::toVector2d(current_frame_->GetLeftFeatureByindex(i)->GetKeyPoint().pt));
-            edge->setInformation(Eigen::Matrix2d::Identity());
-            edge->setRobustKernel(new g2o::RobustKernelHuber);
-            edges.push_back(edge);
+            edge->base2camera_ = Converter::toSE3Quat(current_frame_->GetLeftCamera()->GetT_c_b()); //获取base link到左侧相机的变换
+            auto wPos = mp->Pos();
+            edge->Xw[0] = wPos(0);
+            edge->Xw[1] = wPos(1);
+            edge->Xw[2] = wPos(2);
+
             optimizer.addEdge(edge.get());
-            index++;
         }
+
     }
 
-    // estimate the Pose the determine the outliers
+    // 循环4次优化，每次优化结束之后，会更新哪些边的误差较大，这个较大通过卡方检测得到的，那么就剔除出去这个点。
     const double chi2_th = 5.991;
     int cnt_outlier = 0;
+     // 十四讲里面这个赋值在for循环里面
     for (int iteration = 0; iteration < 4; ++iteration) {
-        vertex_pose->setEstimate(Converter::toSE3Quat(current_frame_->Pose()));
-        optimizer.initializeOptimization();
+        vSE3->setEstimate(Converter::toSE3Quat(current_frame_->Pose()));
+        optimizer.initializeOptimization(0);
         optimizer.optimize(10);
         cnt_outlier = 0;
 
@@ -493,6 +548,8 @@ int Tracking::EstimateCurrentPose_g2o() {
             auto e = edges[i];
             if (features[i]->IsOutlier()) {
                 e->computeError();
+                LOG(INFO) << "Error of re-projection: " << e->error()(0) 
+                                                 << "," << e->error()(1);
             }
             if (e->chi2() > chi2_th) {
                 features[i]->SetOutlier(true);
@@ -512,7 +569,101 @@ int Tracking::EstimateCurrentPose_g2o() {
     LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/"
               << features.size() - cnt_outlier;
     // Set pose and outlier
-    current_frame_->SetPose(vertex_pose->estimate());
+    current_frame_->SetPose(Converter::toIsometry3d(vSE3->estimate()));
+
+    LOG(INFO) << "Current Pose = \n" << current_frame_->Pose().matrix();
+
+    for (auto &feat : features) {
+        if (feat->IsOutlier()) {
+            feat->GetMapPoint().reset();
+            feat->SetOutlier(false);  // maybe we can still use it in future
+        }
+    }
+    return features.size() - cnt_outlier;
+
+}
+
+int Tracking::EstimateCurrentPose_g2o_14() {
+    // 构建图优化，先设定g2o
+    typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> BlockSolverType;  // pose is 6, landmark is 3
+    typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType; // 线性求解器类型
+    // 梯度下降方法，可以从GN, LM, DogLeg 中选
+    auto solver = new g2o::OptimizationAlgorithmLevenberg(
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+    g2o::SparseOptimizer optimizer;     // 图模型
+    optimizer.setAlgorithm(solver);   // 设置求解器
+    optimizer.setVerbose(true);       // 打开调试输出
+
+
+    PoseVertex *vertex_pose = new PoseVertex(); //相机位姿节点
+    vertex_pose->setId(0);
+    vertex_pose->setEstimate(Converter::toSophusSE3d(current_frame_->Pose()));
+    optimizer.addVertex(vertex_pose);
+
+    // 添加地图点到优化器，添加link base顶点到边
+    int index = 1;
+    std::vector<std::shared_ptr<ProjectionEdge>> edges;
+    std::vector<std::shared_ptr<Feature>> features;
+    for (size_t i = 0; i < current_frame_->GetLeftFeatureNum(); ++i) {
+        auto mp = current_frame_->GetLeftFeatureByindex(i)->GetMapPoint();
+        if (mp) {
+            features.push_back(current_frame_->GetLeftFeatureByindex(i));
+            //开始创建测量边，这个边是单元边(全部都是关于左相机的，所以内参数也需要设置左相机的。)
+            std::shared_ptr<ProjectionEdge> edge = std::make_shared<ProjectionEdge>(mp->Pos(),
+                                                    current_frame_->GetLeftCamera()->GetT_c_b(),
+                                                    current_frame_->GetLeftCamera()->K_eigen());
+            edge->setId(index);
+            //添加相机顶点
+            edge->setVertex(0, vertex_pose);
+            //添加地图顶点
+            std::shared_ptr<g2o::VertexSBAPointXYZ> vMapPoint = std::make_shared<g2o::VertexSBAPointXYZ>();
+            edge->setMeasurement(
+                Converter::toVector2d(current_frame_->GetLeftFeatureByindex(i)->GetKeyPoint().pt));
+            edge->setInformation(Eigen::Matrix2d::Identity());
+            edge->setRobustKernel(new g2o::RobustKernelHuber);
+            edges.push_back(edge);
+            optimizer.addEdge(edge.get());
+            index++;
+        }
+    }
+
+    // 循环4次优化，每次优化结束之后，会更新哪些边的误差较大，这个较大通过卡方检测得到的，那么就剔除出去这个点。
+    const double chi2_th = 5.991;
+    int cnt_outlier = 0;
+     // 十四讲里面这个赋值在for循环里面
+    for (int iteration = 0; iteration < 4; ++iteration) {
+        vertex_pose->setEstimate(Converter::toSophusSE3d(current_frame_->Pose()));
+        optimizer.initializeOptimization(0);
+        optimizer.optimize(10);
+        cnt_outlier = 0;
+
+        // count the outliers
+        for (size_t i = 0; i < edges.size(); ++i) {
+            auto e = edges[i];
+            if (features[i]->IsOutlier()) {
+                e->computeError();
+                LOG(INFO) << "Error of re-projection: " << e->error()(0) 
+                                                 << "," << e->error()(1);
+            }
+            if (e->chi2() > chi2_th) {
+                features[i]->SetOutlier(true);
+                e->setLevel(1);
+                cnt_outlier++;
+            } else {
+                features[i]->SetOutlier(false);
+                e->setLevel(0);
+            };
+
+            if (iteration == 2) {
+                e->setRobustKernel(nullptr);
+            }
+        }
+    }
+
+    LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/"
+              << features.size() - cnt_outlier;
+    // Set pose and outlier
+    current_frame_->SetPose(Converter::toIsometry3d(vertex_pose->estimate()));
 
     LOG(INFO) << "Current Pose = \n" << current_frame_->Pose().matrix();
 
@@ -531,82 +682,84 @@ int Tracking::EstimateCurrentPose_g2o() {
 */
 int Tracking::EstimateCurrentPose() {
     //create problem
-    ceres::Problem problem;
-    //loss function for filter out outliers
-    ceres::LossFunction* loss_function = NULL;
+    // ceres::Problem problem;
+    // //loss function for filter out outliers
+    // ceres::LossFunction* loss_function = NULL;
 
-    //提取Isometry3d中的平移和旋转
-    //平移
-    // double trans_x = current_frame_->Pose().translation().x();
-    // double trans_y = current_frame_->Pose().translation().y();
-    // double trans_z = current_frame_->Pose().translation().z();
+    // //提取Isometry3d中的平移和旋转
+    // //平移
+    // // double trans_x = current_frame_->Pose().translation().x();
+    // // double trans_y = current_frame_->Pose().translation().y();
+    // // double trans_z = current_frame_->Pose().translation().z();
 
-    Eigen::Vector<double, 6> vec = isometry2Params(current_frame_->Pose());
-    double ceres_rot[3] = {vec[0],vec[1],vec[2]};
-    double ceres_trans[3] = {vec[3],vec[4],vec[5]};
-    //获取用于重投影的相机内参数
-    Mat33 K_eigen = left_camera_->K_eigen();
+    // Eigen::Vector<double, 6> vec = isometry2Params(current_frame_->Pose());
+    // double ceres_rot[3] = {vec[0],vec[1],vec[2]};
+    // double ceres_trans[3] = {vec[3],vec[4],vec[5]};
+    // //获取用于重投影的相机内参数
+    // Mat33 K_eigen = left_camera_->K_eigen();
     
-    int length = current_frame_->GetLeftFeatureNum();
-     for(int i = 0; i < current_frame_->GetLeftFeatureNum(); ++i) {
-        auto& feature = current_frame_->GetLeftFeatureByindex(i);
-        //获取地图点
-        //auto mp = feature->GetMapPoint().lock();
-        auto mp = feature->GetMapPoint();
-        if(!mp) {
-            continue;
-        }
-        Vec3 mp_eigen = mp->Pos();
-        //获取对应的feature
-        cv::KeyPoint kp = feature->GetKeyPoint();
-        Vec2 kp_eigen(kp.pt.x,kp.pt.y);
-        //创建一个CostFucntion块
-        ceres::CostFunction* cost_function =
-        ReprojectionError::Create(mp_eigen,kp_eigen,K_eigen);//传递测量值到costFunction
-        //根据CostFunction 产生Residual Block 
-        problem.AddResidualBlock(cost_function,loss_function,ceres_rot,ceres_trans); //传递外参数
-    }
+    // int length = current_frame_->GetLeftFeatureNum();
+    //  for(int i = 0; i < current_frame_->GetLeftFeatureNum(); ++i) {
+    //     auto& feature = current_frame_->GetLeftFeatureByindex(i);
+    //     //获取地图点
+    //     //auto mp = feature->GetMapPoint().lock();
+    //     auto mp = feature->GetMapPoint();
+    //     if(!mp) {
+    //         continue;
+    //     }
+    //     Vec3 mp_eigen = mp->Pos();
+    //     //获取对应的feature
+    //     cv::KeyPoint kp = feature->GetKeyPoint();
+    //     Vec2 kp_eigen(kp.pt.x,kp.pt.y);
+    //     //创建一个CostFucntion块
+    //     ceres::CostFunction* cost_function =
+    //     ReprojectionError::Create(mp_eigen,kp_eigen,K_eigen);//传递测量值到costFunction
+    //     //根据CostFunction 产生Residual Block 
+    //     problem.AddResidualBlock(cost_function,loss_function,ceres_rot,ceres_trans); //传递外参数
+    // }
 
-    // Make Ceres automatically detect the bundle structure. Note that the
-    // standard solver, SPARSE_NORMAL_CHOLESKY, also works fine but it is slower
-    // for standard bundle adjustment problems.
-    ceres::Solver::Options options;
-    options.linear_solver_type = ceres::DENSE_SCHUR;
-    options.minimizer_progress_to_stdout = true;
+    // // Make Ceres automatically detect the bundle structure. Note that the
+    // // standard solver, SPARSE_NORMAL_CHOLESKY, also works fine but it is slower
+    // // for standard bundle adjustment problems.
+    // ceres::Solver::Options options;
+    // options.linear_solver_type = ceres::DENSE_SCHUR;
+    // options.minimizer_progress_to_stdout = true;
 
-    ceres::Solver::Summary summary;
-    ceres::Solve(options, &problem, &summary);
-    std::cout << summary.FullReport() << "\n";
+    // ceres::Solver::Summary summary;
+    // ceres::Solve(options, &problem, &summary);
+    // std::cout << summary.FullReport() << "\n";
     
 
-    //extract result from ceres solver
-    double ceres_results[6];
-    ceres_results[0] = ceres_rot[0];
-    ceres_results[1] = ceres_rot[1];
-    ceres_results[2] = ceres_rot[2];
+    // //extract result from ceres solver
+    // double ceres_results[6];
+    // ceres_results[0] = ceres_rot[0];
+    // ceres_results[1] = ceres_rot[1];
+    // ceres_results[2] = ceres_rot[2];
 
-    ceres_results[3] = ceres_trans[3];
-    ceres_results[4] = ceres_trans[4];
-    ceres_results[5] = ceres_trans[5];
+    // ceres_results[3] = ceres_trans[3];
+    // ceres_results[4] = ceres_trans[4];
+    // ceres_results[5] = ceres_trans[5];
 
 
-    Eigen::Isometry3d result = Eigen::params2Isometry(ceres_results);
+    // Eigen::Isometry3d result = Eigen::params2Isometry(ceres_results);
 
-    //将优化结果赋值到current frame
-    current_frame_->SetPose(result);    
+    // //将优化结果赋值到current frame
+    // current_frame_->SetPose(result);
 }
 
 //注意，在这个阶段，因为我们不知道base_link在世界坐标系下的姿态，所以，我们把当前三角化成功
 //的点的参考原点就是当前base_link的原点。
 bool Tracking::BuildInitMap() {
     //获取base_link到左右相机的转换关系
-    Eigen::Isometry3d left_T_c_b = current_frame_->GetLeftCamera()->GetT_c_b();
-    Eigen::Isometry3d right_T_c_b = current_frame_->GetRightCamera()->GetT_c_b();
-    cv::Mat left_T_c_b_cv = Converter::toCVMatf34(left_T_c_b);
-    cv::Mat right_T_c_b_cv = Converter::toCVMatf34(right_T_c_b);
-    LOG(INFO) << "left_T_c_b_cv: \n " << left_T_c_b_cv;
-    LOG(INFO) << "right_T_c_b_cv: \n" << right_T_c_b_cv;
-    std::vector<cv::KeyPoint> keypoint_left, keypoint_right;
+    Eigen::Isometry3d T_left_b = current_frame_->GetLeftCamera()->GetT_c_b();
+    Eigen::Isometry3d T_right_b = current_frame_->GetRightCamera()->GetT_c_b();
+    Eigen::Isometry3d T_right_left = T_right_b * T_left_b.inverse();
+    cv::Mat T_left_left_cv = Converter::toCVMatf34(Eigen::Isometry3d::Identity());
+    cv::Mat T_right_left_cv = Converter::toCVMatf34(T_right_left);
+    LOG(INFO) << "T_left_left_cv: \n " << T_left_left_cv;
+    LOG(INFO) << "T_right_left_cv: \n" << T_right_left_cv;
+
+    std::vector<cv::Point2f> pts_1, pts_2; //这里的点是相机坐标系下的归一化X,Y坐标
     std::vector<cv::Point3d> triagulated; //base_link 坐标系下的三角化点
     std::vector<int> validPointIndex;
     for(int i = 0; i < current_frame_->GetLeftFeatureNum();i++) {
@@ -616,17 +769,23 @@ bool Tracking::BuildInitMap() {
         }
         auto kp_left = current_frame_->GetLeftFeatureByindex(i)->GetKeyPoint();
         auto kp_right = current_frame_->GetRightFeatureByindex(i)->GetKeyPoint();
-        keypoint_left.push_back(kp_left);
-        keypoint_right.push_back(kp_right);
+        pts_1.push_back(current_frame_->GetLeftCamera()->Pixel2camera(kp_left));
+        pts_2.push_back(current_frame_->GetRightCamera()->Pixel2camera(kp_right));
         validPointIndex.push_back(i);
     }
-      int validCnt = 0; //成功三角化的地图点数量
-    if(Triangulation(keypoint_left,keypoint_right,left_T_c_b_cv,right_T_c_b_cv,triagulated)) {
+    int validCnt = 0; //成功三角化的地图点数量
+    //左相机为坐标原点，三角化之后的点是左侧相机为坐标系的点，后面需要转换为base link下面的点
+    if(Triangulation(pts_1,
+                    pts_2,
+                    T_left_left_cv,
+                    T_right_left_cv,
+                    triagulated)) {
         //产生了地图点，添加到地图中
         for(int i = 0; i < triagulated.size();i++) {
             if(triagulated[i].z < 0) continue;
-            
-            auto new_mp = MapPoint::CreateNewMapPoint(Vec3(triagulated[i].x,triagulated[i].y,triagulated[i].z));
+            Vec3 pos_inLeft(triagulated[i].x,triagulated[i].y,triagulated[i].z);
+            Vec3 pos_inBase = T_left_b.inverse() * pos_inLeft;
+            auto new_mp = MapPoint::CreateNewMapPoint(pos_inBase);
             new_mp->AddObservation(current_frame_->GetLeftFeatureByindex(validPointIndex[i]));
             new_mp->AddObservation(current_frame_->GetRightFeatureByindex(validPointIndex[i]));
             std::shared_ptr<MapPoint> smp = std::move(new_mp);
@@ -642,7 +801,6 @@ bool Tracking::BuildInitMap() {
     current_frame_->SetKeyFrame();
     map_->InsertKeyFrame(current_frame_);
     backend_->UpdateMap();
-
     LOG(INFO) << "Building Init map with valid " << validCnt << " map points.";
     return true;
 }

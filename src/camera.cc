@@ -93,6 +93,13 @@ Vec3 Camera::Pixel2camera(const Vec2& p_p, const double depth) {
     return normalized;
 }
 
+cv::Point2f Camera::Pixel2camera(const cv::KeyPoint& p_p) {
+    return cv::Point2f(
+        ((p_p.pt.x - pinpole_intrinsics_.cx_) / pinpole_intrinsics_.fx_),
+        ((p_p.pt.y - pinpole_intrinsics_.cy_) / pinpole_intrinsics_.fy_)
+        );
+}
+
 Vec2 Camera::World2pixel(const Vec3& p_w, const Eigen::Isometry3d& T_b_w) {
     Vec2 pixel = Camera2pixel(World2camera(p_w,T_b_w));
     return pixel;
@@ -141,8 +148,28 @@ bool Camera::LoadIntrinsics(const std::string& fileStr) {
         pinpole_intrinsics_.k2_ = config["Camera.k2"].as<double>();
         pinpole_intrinsics_.p1_ = config["Camera.p1"].as<double>();
         pinpole_intrinsics_.p2_ = config["Camera.p2"].as<double>();
+
+        baseline_ = config["base_line"].as<double>();
     }
 }
+
+const float Camera::GetBaselineMeter() const {
+    return baseline_;
+}
+
+const float Camera::GetBaselineFx() const {
+    return baseline_*pinpole_intrinsics_.fx_;
+}
+
+cv::Mat Camera::GetDistCoeff() {
+    cv::Mat cv_distCoef(1,4,CV_32F);
+    cv_distCoef.at<float>(0,0) = pinpole_intrinsics_.k1_;
+    cv_distCoef.at<float>(0,1) = pinpole_intrinsics_.k2_;
+    cv_distCoef.at<float>(0,2) = pinpole_intrinsics_.p1_;
+    cv_distCoef.at<float>(0,3) = pinpole_intrinsics_.p2_;
+
+    return cv_distCoef.clone();
+}   
 
 bool Camera::LoadExtrinsics(const std::string& fileStr) {
     //TODO(李阳)：根据左目还是右目相机，完成对该相机到Frame的外参数

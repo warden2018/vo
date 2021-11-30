@@ -41,3 +41,7 @@ DECLARE_int32(queue_size);
 DECLARE_int32(activateKF);
 //vo config file
 DECLARE_string(vo_config);
+
+//ORB Extractor config file
+DECLARE_string(LeftORBParamsFile);
+DECLARE_string(RightORBParamsFile);

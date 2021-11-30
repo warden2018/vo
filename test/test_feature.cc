@@ -11,8 +11,8 @@ using namespace my_slam;
 //该case是测试shared_ptr和weak_ptr的引用计数、内存块是否存在
 TEST_CASE("Feature","") {
     //模拟先对2D特征检测，保存好Feature
-    auto new_frame = Frame::CreateFrame();
-    std::shared_ptr<Frame> sfr = std::move(new_frame);
+    //auto new_frame = Frame::CreateFrame();
+    //std::shared_ptr<Frame> sfr = std::move(new_frame);
     // cv::Point2f pc(100,100);
     // cv::KeyPoint kp(pc,7);
     // auto feature = Feature::CreateNewFeature(sfr,kp);
@@ -41,48 +41,48 @@ TEST_CASE("Feature","") {
     // sfr->GetLeftFeatureByindex(1)->SetMapPoint(smp2);
 
     //for 循环先创建五个left feature
-    for(int i = 0; i < 5; i++) {
-        cv::Point2f pc(150 + i,100);
-        cv::KeyPoint kp(pc,7);
-        auto feature = Feature::CreateNewFeature(sfr,kp);
-        std::shared_ptr<Feature> sfeature = std::move(feature);
-        //Feature::Ptr feature(new Feature(sfr,kp)); //像素点
-        sfr->AddLeftFeature(sfeature);
-    }
+    // for(int i = 0; i < 5; i++) {
+    //     cv::Point2f pc(150 + i,100);
+    //     cv::KeyPoint kp(pc,7);
+    //     auto feature = Feature::CreateNewFeature(sfr,kp);
+    //     std::shared_ptr<Feature> sfeature = std::move(feature);
+    //     //Feature::Ptr feature(new Feature(sfr,kp)); //像素点
+    //     sfr->AddLeftFeature(sfeature);
+    // }
 
-    auto new_mp1 = MapPoint::CreateNewMapPoint(Vec3(10,20,1));
-    auto new_mp2 = MapPoint::CreateNewMapPoint(Vec3(10,20,2));
-    auto new_mp3 = MapPoint::CreateNewMapPoint(Vec3(10,20,3));
-    auto new_mp4 = MapPoint::CreateNewMapPoint(Vec3(10,20,4));
-    auto new_mp5 = MapPoint::CreateNewMapPoint(Vec3(10,20,5));
-    std::vector<std::shared_ptr<MapPoint>> new_mps;
-    new_mps.push_back(std::move(new_mp1));
-    new_mps.push_back(std::move(new_mp2));
-    new_mps.push_back(std::move(new_mp3));
-    new_mps.push_back(std::move(new_mp4));
-    new_mps.push_back(std::move(new_mp5));
-    //创建五个MapPoint
-    for(int i = 0; i < 5; i++) {
-        //std::unique_ptr<MapPoint> new_mp = MapPoint::CreateNewMapPoint(Vec3(10,20,1 + i));
-        //auto new_smp = new_mps.at(i);
-        std::unique_ptr<MapPoint> new_mp(new MapPoint(Vec3(10,20,1 + i)));
-        std::shared_ptr<MapPoint> smp = std::move(new_mp);
-        new_mps.push_back(smp);
-        smp->AddObservation(sfr->GetLeftFeatureByindex(i));
-        auto cur_leftFea = sfr->GetLeftFeatureByindex(i);
-        cur_leftFea->SetMapPoint(smp);
-    }
+    // auto new_mp1 = MapPoint::CreateNewMapPoint(Vec3(10,20,1));
+    // auto new_mp2 = MapPoint::CreateNewMapPoint(Vec3(10,20,2));
+    // auto new_mp3 = MapPoint::CreateNewMapPoint(Vec3(10,20,3));
+    // auto new_mp4 = MapPoint::CreateNewMapPoint(Vec3(10,20,4));
+    // auto new_mp5 = MapPoint::CreateNewMapPoint(Vec3(10,20,5));
+    // std::vector<std::shared_ptr<MapPoint>> new_mps;
+    // new_mps.push_back(std::move(new_mp1));
+    // new_mps.push_back(std::move(new_mp2));
+    // new_mps.push_back(std::move(new_mp3));
+    // new_mps.push_back(std::move(new_mp4));
+    // new_mps.push_back(std::move(new_mp5));
+    // //创建五个MapPoint
+    // for(int i = 0; i < 5; i++) {
+    //     //std::unique_ptr<MapPoint> new_mp = MapPoint::CreateNewMapPoint(Vec3(10,20,1 + i));
+    //     //auto new_smp = new_mps.at(i);
+    //     std::unique_ptr<MapPoint> new_mp(new MapPoint(Vec3(10,20,1 + i)));
+    //     std::shared_ptr<MapPoint> smp = std::move(new_mp);
+    //     new_mps.push_back(smp);
+    //     smp->AddObservation(sfr->GetLeftFeatureByindex(i));
+    //     auto cur_leftFea = sfr->GetLeftFeatureByindex(i);
+    //     cur_leftFea->SetMapPoint(smp);
+    // }
 
-    //读取五个Feature当中的MapPoint
-    auto left_features = sfr->GetLeftFeatures();
-    for (const auto& feature: left_features) {
-        auto wmp = feature->GetMapPoint();
-        std::shared_ptr<MapPoint> smp = wmp; 
-        if(smp != nullptr) {
-            std::cout << "MapPoint z: " << smp->Pos().z() << std::endl;
-        }
-        REQUIRE(smp != nullptr);
-    }
+    // //读取五个Feature当中的MapPoint
+    // auto left_features = sfr->GetLeftFeatures();
+    // for (const auto& feature: left_features) {
+    //     auto wmp = feature->GetMapPoint();
+    //     std::shared_ptr<MapPoint> smp = wmp; 
+    //     if(smp != nullptr) {
+    //         std::cout << "MapPoint z: " << smp->Pos().z() << std::endl;
+    //     }
+    //     REQUIRE(smp != nullptr);
+    // }
 
     // auto mp2 = smp;
     // countNum = mp2.use_count();

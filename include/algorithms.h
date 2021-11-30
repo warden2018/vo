@@ -15,22 +15,16 @@ namespace my_slam {
  * @param[out] points 三角化之后的3D点集合,坐标系原点是base_link
  */
 bool Triangulation(
-  const std::vector<cv::KeyPoint>& keypoint_1,
-  const std::vector<cv::KeyPoint>& keypoint_2,
+  const std::vector<cv::Point2f>& pts_1,
+  const std::vector<cv::Point2f>& pts_2,
   const cv::Mat& T1, const cv::Mat& T2,
   std::vector<cv::Point3d>& points) {
 
-  std::vector<cv::Point2f> pts_1, pts_2;
-  if(keypoint_1.size() != keypoint_2.size()) {
+   if(pts_1.size() != pts_2.size()) {
     LOG(ERROR) << "KeyPoint size is not equal.";
     return false;
   }
-  for (size_t i=0;i<keypoint_2.size();i++) {
-    // 提取KeyPoint中的Point2f
-    pts_1.push_back(keypoint_1[i].pt);
-    pts_2.push_back(keypoint_2[i].pt);
-  }
-
+  
   cv::Mat pts_3d_h;
   std::vector<cv::Point3f> pt_3d;
   //转换出来的是Homogeneous的坐标，需要接着转换为欧几里德坐标
@@ -42,27 +36,40 @@ bool Triangulation(
   }
 
   //转换
-  convertPointsHomogeneous(pts_3d_h.reshape(4, 1), pt_3d);
-
   for(int i = 0; i < pts_3d_h.cols; i++) {
-      cv::Mat x = pts_3d_h.col(i);
-      LOG(INFO) << "triangulatePoints output: " << i << ": [" << x.at<float>(0,0)
-                << "," << x.at<float>(1,0)
-                << "," << x.at<float>(2,0)
-                << "," << x.at<float>(3,0)
-                <<"'"
-                <<"encludian coord: [" << pt_3d.at(i).x << ","
-                << pt_3d.at(i).y << ","
-                << pt_3d.at(i).z << "]";
+      Mat x = pts_3d_h.col(i);
+      if(x.at<float>(3,0) == 0.0) {
+        continue;
+      }
+      x /= x.at<float>(3,0);
 
-      //保存结果
-      points.push_back(cv::Point3d(pt_3d.at(i).x,pt_3d.at(i).y,pt_3d.at(i).z));
+      cv::Point3d p (
+          x.at<float>(0,0),
+          x.at<float>(1,0),
+          x.at<float>(2,0)
+      );
+
+      points.push_back(p);
   }
+  // convertPointsHomogeneous(pts_3d_h.reshape(4, 1), pt_3d);
+
+  // for(int i = 0; i < pts_3d_h.cols; i++) {
+  //     cv::Mat x = pts_3d_h.col(i);
+  //     LOG(INFO) << "triangulatePoints output: " << i << ": [" << x.at<float>(0,0)
+  //               << "," << x.at<float>(1,0)
+  //               << "," << x.at<float>(2,0)
+  //               << "," << x.at<float>(3,0)
+  //               <<"'"
+  //               <<"encludian coord: [" << pt_3d.at(i).x << ","
+  //               << pt_3d.at(i).y << ","
+  //               << pt_3d.at(i).z << "]";
+
+  //     //保存结果
+  //     points.push_back(cv::Point3d(pt_3d.at(i).x,pt_3d.at(i).y,pt_3d.at(i).z));
+  // }
 
 
   return true;
 }
-
-
     
 } //namespace my_slam

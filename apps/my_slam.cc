@@ -36,8 +36,8 @@ int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   //Glog
   FLAGS_log_dir = FLAGS_myslamlog_dir;
-  std::string leftTopic("/zed2i/zed_node/left_raw/image_raw_color");
-  std::string rightTopic("/zed2i/zed_node/right_raw/image_raw_color");
+  //std::string leftTopic("/zed2i/zed_node/left_raw/image_raw_color");
+  //std::string rightTopic("/zed2i/zed_node/right_raw/image_raw_color");
   
   google::InitGoogleLogging(argv[0]);
 
@@ -53,9 +53,9 @@ int main(int argc, char **argv) {
   message_filters::Subscriber<sensor_msgs::Image>* left_img_sub_;
   message_filters::Subscriber<sensor_msgs::Image>* right_img_sub_;
   left_img_sub_ 
-      = new message_filters::Subscriber<sensor_msgs::Image>(n,leftTopic, 1);
+      = new message_filters::Subscriber<sensor_msgs::Image>(n,FLAGS_leftImgTopic, 1);
   right_img_sub_ 
-      = new message_filters::Subscriber<sensor_msgs::Image>(n,rightTopic, 1);
+      = new message_filters::Subscriber<sensor_msgs::Image>(n,FLAGS_rightImgTopic, 1);
 
   message_filters::Synchronizer<SyncPolicyT> *image_synchronizer_ = 
       new message_filters::Synchronizer<SyncPolicyT>(SyncPolicyT(10), *left_img_sub_, *right_img_sub_);

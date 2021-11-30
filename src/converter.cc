@@ -32,6 +32,13 @@ g2o::SE3Quat Converter::toSE3Quat(const Eigen::Isometry3d& isoT) {
     return g2o::SE3Quat(rotation,translation);
 }
 
+Eigen::Isometry3d Converter::toIsometry3d(const g2o::SE3Quat& T) {
+    Eigen::Matrix<double,4,4> eigMat = T.to_homogeneous_matrix();
+    Eigen::Isometry3d isoT = Eigen::Isometry3d::Identity();
+    isoT.matrix() = eigMat;
+    return isoT;
+}
+
 // cv::Mat Converter::toCvMat(const g2o::SE3Quat &SE3)
 // {
 //     Eigen::Matrix<double,4,4> eigMat = SE3.to_homogeneous_matrix();
@@ -45,6 +52,19 @@ g2o::SE3Quat Converter::toSE3Quat(const Eigen::Isometry3d& isoT) {
 //     double s = Sim3.scale();
 //     return toCvSE3(s*eigR,eigt);
 // }
+
+
+SE3 Converter::toSophusSE3d(const Eigen::Isometry3d& isoT) {
+    SE3 SE3_Rt(isoT.rotation(), isoT.translation());   // Create Sophus SE3 from R and t
+    return SE3_Rt;
+}
+
+Eigen::Isometry3d Converter::toIsometry3d(const SE3& se3) {
+    Eigen::Isometry3d isoT = Eigen::Isometry3d::Identity();
+    isoT.rotate(se3.rotationMatrix());
+    isoT.pretranslate(se3.translation());
+    return isoT;
+}
 
 cv::Mat Converter::toCvMat(const Eigen::Matrix<double,4,4> &m)
 {
@@ -64,6 +84,16 @@ cv::Mat Converter::toCVMatf34(const Eigen::Isometry3d& isoT) {
         }
     }
 
+    return cvMat.clone();
+}
+
+cv::Mat Converter::toCVMatf33(const Mat33& K) {
+    cv::Mat cvMat(3,3,CV_32F);
+    for(int i = 0; i < 3; i++) {
+        for(int j = 0; j < 3; j++) {
+            cvMat.at<float>(i,j) = K.matrix()(i,j);
+        }
+    }
     return cvMat.clone();
 }
 
@@ -176,6 +206,11 @@ cv::Point2f Converter::Pixel2normal(const cv::KeyPoint& keyPoint, const cv::Mat 
     Mat33 K_eigen = toMatrix3d(K);
     normalized = K_eigen.inverse() * normalized;
     return cv::Point2f(normalized(0),normalized(1));
+}
+
+Vec3 Converter::toVec3(const Vec3f& vec) {
+    Vec3 vecd(vec(0),vec(1),vec(2));
+    return vecd;
 }
 
 } //namespace my_slam

@@ -1,0 +1,9 @@
+ORBextractor.nFeatures: 2000
+
+ORBextractor.scaleFactor: 1.2
+
+ORBextractor.nLevels: 8
+
+ORBextractor.iniThFAST: 20
+
+ORBextractor.minThFAST: 7

@@ -90,6 +90,7 @@ set(THIRD_PARTY_LIBS
 include_directories(include 
                     ${catkin_INCLUDE_DIRS}
                     common
+                    3rd/DBoW2/DBoW2
                     test)
 
 # libs including src/ and gflag
@@ -104,6 +105,10 @@ add_library(myslamLib SHARED
         src/map.cc
         src/viewer.cc
         src/backend.cc
+        src/ORBextractor.cc
+        src/ORBmatcher.cc
+        src/key_frame.cc
+        src/key_frameDatabase.cc
         common/gflags.h
         common/gflags.cc
         
@@ -112,7 +117,7 @@ add_library(myslamLib SHARED
 message(STATUS "Yaml lib: ${YAML_CPP_LIBRARIES}")
 add_library(yaml_cpp_lib STATIC IMPORTED)
 set_target_properties(yaml_cpp_lib PROPERTIES IMPORTED_LOCATION /home/minerva/Downloads/3rd/yaml-cpp-yaml-cpp-0.7.0/build/libyaml-cpp.a)
-target_link_libraries(myslamLib yaml_cpp_lib ${THIRD_PARTY_LIBS} ${catkin_LIBRARIES} ${YAML_CPP_LIBRARIES})
+target_link_libraries(myslamLib yaml_cpp_lib ${THIRD_PARTY_LIBS} ${catkin_LIBRARIES} ${YAML_CPP_LIBRARIES} DBoW2)
 
 # binary
 add_executable(my_slam apps/my_slam.cc)

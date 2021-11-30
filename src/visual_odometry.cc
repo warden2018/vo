@@ -14,6 +14,7 @@ VisualOdometry::VisualOdometry(std::string& conf_dir)
 
 }
 
+//实例化Tracking,Backend,Viewer;Tracking是主线程。
 bool VisualOdometry::Init() {
     //std::cout << "FLAGS_left_camera_params: " << FLAGS_left_camera_params;
     //std::cout << "FLAGS_right_camera_params: " << FLAGS_right_camera_params;
@@ -28,7 +29,6 @@ bool VisualOdometry::Init() {
     map_ = Map::Ptr(new Map);
     backend_ = Backend::Ptr(new Backend);
     viewer_ = Viewer::Ptr(new Viewer);
-    
     //设置相互持有的指针
     //跟踪
     tracking_->SetBackend(backend_);
@@ -49,6 +49,7 @@ void VisualOdometry::Run() {
     vo_run_ = true;
 }
 
+
 void VisualOdometry::AddRosData(const sensor_msgs::ImageConstPtr msg1, const sensor_msgs::ImageConstPtr msg2) {
     //LOG(INFO) << "Image callback recv. images. msg1: " << msg1->header.frame_id << " msg2: " << msg2->header.frame_id;
     LOG(INFO) << "VO is on or not: " << vo_run_;
@@ -65,25 +66,12 @@ void VisualOdometry::AddRosData(const sensor_msgs::ImageConstPtr msg1, const sen
     catch (cv_bridge::Exception& e) {
         LOG(ERROR) << "cv_bridge exception: " << e.what();
     }
-    //创建一个新的Frame
+    //ROS 数据转换为OpenCV的Mat
     cv::Mat image_left, image_right;
     image_left = cv_ptr1->image;
     image_right = cv_ptr2->image;
-
-    auto new_frame = Frame::CreateFrame();
-
-    new_frame->SetLeftImg(image_left);
-    new_frame->SetRightImg(image_right);
-    
-    new_frame->SetLeftCamera(left_camera_);
-    new_frame->SetRightCamera(right_camera_);
-    //添加新的Frame到跟踪模块
-    std::shared_ptr<Frame> sfr = std::move(new_frame);
-    LOG(INFO) << "Before add frame to tracking.";
-    tracking_->AddFrame(sfr);
-    
-    //cv::imshow("left", cv_ptr1->image);
-    //cv::imshow("right", cv_ptr2->image);
+    double time_stamp = msg2->header.stamp.sec + msg2->header.stamp.nsec / 1e9;
+    tracking_->AddImage(time_stamp,image_left,image_right);
 }
 
 } // namespace my_slam

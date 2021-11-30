@@ -13,6 +13,7 @@
 #include "frame.h"
 #include "camera.h"
 #include "viewer.h"
+#include"ORBextractor.h"
 
 namespace my_slam{
 
@@ -28,6 +29,8 @@ class Tracking {
   Tracking();
 
   void AddFrame(std::shared_ptr<Frame> frame);
+
+  bool AddImage(const double& timeStamp, const cv::Mat& leftImg, const cv::Mat& rightImg);
 
   TrackingStatus GetStatus();
 
@@ -74,8 +77,9 @@ class Tracking {
   * 根据光流的前后帧匹配结果，利用图优化做非线性优化，BA
   * @return 
   */
-  int EstimateCurrentPose_g2o();
+  int EstimateCurrentPose_g2o_14();
 
+  int EstimateCurrentPose_g2o_orbslam2();
   /**
   * 如果光流匹配到的特征点数量不够多，那么认为遇到了较新的场景，那么，就把该Frame添加到
   * @return true 如果添加成功
@@ -126,9 +130,11 @@ class Tracking {
   std::shared_ptr<Map> map_ = nullptr;
   std::shared_ptr<Backend> backend_ = nullptr;
   std::shared_ptr<Viewer> viewer_ = nullptr;
+  std::shared_ptr<ORBextractor> ORBextractor_left_ = nullptr;
+  std::shared_ptr<ORBextractor> ORBextractor_right_ = nullptr;
   Eigen::Isometry3d relative_motion_;
   int tracking_inliers_;
-  cv::Ptr<cv::GFTTDetector> gftt_detector_ = nullptr;
+  //cv::Ptr<cv::GFTTDetector> gftt_detector_ = nullptr; //using ORB detector instead
 };
 }//namespace my_slam
 

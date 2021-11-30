@@ -15,8 +15,8 @@ DEFINE_double(pyr_scale,0.5,"The scale between the neighbor pyramid images.");
 
 //glog
 DEFINE_string(myslamlog_dir,"/tmp","The dir of the log files.");
-DEFINE_string(left_camera_params,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/params/zed2i_left_VGA.yaml","");
-DEFINE_string(right_camera_params,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/params/zed2i_right_VGA.yaml","");
+DEFINE_string(left_camera_params,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/params/zed2i_left_2k.yaml","");
+DEFINE_string(right_camera_params,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/params/zed2i_right_2k.yaml","");
 //Tracking参数
 DEFINE_int32(nFeatures,200,"");
 DEFINE_int32(nFeatureIinit,100,"");
@@ -42,3 +42,7 @@ DEFINE_int32(activateKF,200,"激活的KF的最大数量");
 
 //vo config
 DEFINE_string(vo_config,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/conf/myslam.conf","vo config file.");
+
+//ORB
+DEFINE_string(LeftORBParamsFile,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/params/ORB_extractor_left.yaml","");
+DEFINE_string(RightORBParamsFile,"/home/minerva/minerva/Dai_Yang/catkin_ws/src/my_slam/params/ORB_extractor_right.yaml","");

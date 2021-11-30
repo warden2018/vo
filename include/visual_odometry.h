@@ -20,6 +20,8 @@
 
 namespace my_slam{
 
+class ORBextractor;
+
 class VisualOdometry {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -39,12 +41,15 @@ class VisualOdometry {
  private:
   std::string   configFile_;
   Tracking::Ptr tracking_ = nullptr;
+ 
   Map::Ptr      map_ = nullptr;
   Backend::Ptr  backend_ = nullptr;
   Viewer::Ptr   viewer_ = nullptr;
   Camera::Ptr   left_camera_;
   Camera::Ptr   right_camera_;
   bool          vo_run_;
+  //ORB extractor
+
 };
 }//namespace my_slam
 

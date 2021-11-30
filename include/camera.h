@@ -31,16 +31,22 @@ class Camera {
 
   void SetRight();
 
+  const float GetBaselineMeter() const;
+
+  const float GetBaselineFx() const;
+
   cv::Mat UndistortImage(cv::Mat img);
   //坐标系转换：世界坐标系，相机坐标系和图像坐标系
   Vec3 World2camera(const Vec3& p_w, const Eigen::Isometry3d& T_b_w); // T_c_w:T^c_w in latex
   Vec3 Camera2world(const Vec3& p_c, const Eigen::Isometry3d& T_b_w); // T_c_w:T^c_w in latex
   Vec2 Camera2pixel(const Vec3& p_c); 
   Vec3 Pixel2camera(const Vec2& p_p, const double depth);
+  cv::Point2f Pixel2camera(const cv::KeyPoint& p_p);
   Vec2 World2pixel(const Vec3& p_w, const Eigen::Isometry3d& T_b_w);
   Vec3 Pixel2world(const Vec2& p_p, const Eigen::Isometry3d& T_b_w,const double depth);
   Eigen::Isometry3d GetT_c_b();
   static Camera::Ptr CreateCamera(const std::string& paramsfile);
+  cv::Mat GetDistCoeff();
  private:
   std::string intrinsincs_file_;
   PinpoleIntrinsics pinpole_intrinsics_;

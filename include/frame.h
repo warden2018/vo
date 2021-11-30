@@ -21,6 +21,7 @@ namespace my_slam{
 class Feature;
 class MapPoint;
 class Camera;
+class ORBextractor;
 
 class Frame {
 public:
@@ -28,8 +29,11 @@ public:
 
  typedef std::unique_ptr<Frame> Ptr;
 
- Frame();
- Frame(long id, double ts, const Eigen::Isometry3d& pose, const Mat& leftImg,const Mat& rightImg);
+ Frame(double ts, std::shared_ptr<Camera> left, std::shared_ptr<Camera> right,
+                                std::shared_ptr<ORBextractor> leftExtrator,
+                                std::shared_ptr<ORBextractor> rightExtrator, 
+                                const Eigen::Isometry3d& pose, 
+                                const Mat& leftImg,const Mat& rightImg);
 
  const Eigen::Isometry3d& Pose();
 
@@ -53,9 +57,9 @@ public:
 
  const int GetRightFeatureNum() const;
  
- const cv::Mat& GetUndistortLeftImg() const;
+ const cv::Mat GetUndistortLeftImg();
 
- const cv::Mat& GetUndistortRightImg() const;
+ const cv::Mat GetUndistortRightImg();
 
  bool SetLeftImg(const cv::Mat& img);
 
@@ -74,8 +78,30 @@ public:
  const std::shared_ptr<Camera>& GetLeftCamera();
 
  const std::shared_ptr<Camera>& GetRightCamera();
+ //flag:0,左相机，1,右相机
+ void ExtractORB(int flag, const cv::Mat& img, const int x0, const int x1);
+ 
+ //ORB描述子匹配左右图像上的特征点，如果能够匹配到，视差计算深度，得到地图点。这个地图点，
+ //是后面做相机姿态估计的基础。
+ void ComputeStereoMatches();
+ 
+ //返回的是世界坐标系的坐标
+ Vec3f UnprojectStereo(const int &i);
+ 
+ void UndistortKeyPoints();
 
- static Frame::Ptr CreateFrame();
+ static Frame::Ptr CreateFrame(double ts, 
+                                std::shared_ptr<Camera> left, std::shared_ptr<Camera> right,
+                                std::shared_ptr<ORBextractor> leftExtrator,
+                                std::shared_ptr<ORBextractor> rightExtrator, 
+                                const Eigen::Isometry3d& pose, 
+                                const Mat& leftImg,const Mat& rightImg);
+
+ int N; //ORB detector检测到的特征点数量
+ int Nleft_, Nright_;
+ std::vector<float> vDepth_;
+ //地图点容器
+ std::vector<std::shared_ptr<MapPoint>> vpMapPoints_;
 
 private:
  unsigned long id_;
@@ -91,6 +117,32 @@ private:
 
  std::vector<std::shared_ptr<Feature>> features_left_;
  std::vector<std::shared_ptr<Feature>> features_right_;
+ 
+ 
+
+ //双目的基线长度
+ float baseline_; //单位是米
+ float baselineFx_; //单位是像素
+
+ //ORB extractor related
+ std::shared_ptr<ORBextractor> ORBextractorLeft_;
+ std::shared_ptr<ORBextractor> ORBextractorRight_;
+ std::vector<cv::KeyPoint> vKeys_, vKeysRight_;
+ // ORB descriptor, each row associated to a keypoint.
+ cv::Mat Descriptors_, DescriptorsRight_;
+ int monoLeft_, monoRight_;
+ std::vector<float> vuRight_;
+ std::vector<cv::KeyPoint> vKeysUn_;
+ 
+
+ // Scale pyramid info.
+ int nScaleLevels_;
+ float fScaleFactor_;
+ float fLogScaleFactor_;
+ std::vector<float> vScaleFactors_;
+ std::vector<float> vInvScaleFactors_;
+ std::vector<float> vLevelSigma2_;
+ std::vector<float> vInvLevelSigma2_;
 
 
 };

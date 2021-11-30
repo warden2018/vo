@@ -50,6 +50,7 @@ void Feature::SetOnLeft(const bool onleft) {
 Feature::Ptr Feature::CreateNewFeature(std::shared_ptr<Frame> frame,const cv::KeyPoint& kp) {
     std::unique_ptr<Feature> new_feature = std::make_unique<Feature>(frame,kp);
     new_feature->is_outlier_ = false;
+    new_feature->is_onLeft_image_ = true;
     return new_feature;
 }
 
